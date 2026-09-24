@@ -1,8 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { SiteFooter } from "../components/SiteFooter";
+import { fetchProperties, isArchived, submitEnquiry, type Property } from "../lib/properties";
+
+/** What "Book a viewing" puts in the URL so the form opens ready to send. */
+interface ContactSearch {
+  property?: string;
+  interest?: string;
+}
 
 export const Route = createFileRoute("/contact")({
+  validateSearch: (search: Record<string, unknown>): ContactSearch => ({
+    ...(typeof search["property"] === "string" ? { property: search["property"] } : {}),
+    ...(typeof search["interest"] === "string" ? { interest: search["interest"] } : {}),
+  }),
+  // The listing picker offers the live portfolio, so it can never name a
+  // property that has since been withdrawn.
+  loader: () => fetchProperties(),
   head: () => ({
     meta: [
       { title: "Contact — Maison" },
@@ -24,11 +38,44 @@ export const Route = createFileRoute("/contact")({
 });
 
 function ContactPage() {
+  const all = Route.useLoaderData();
+  const { property: preselected, interest: preselectedInterest } = Route.useSearch();
+  // Only homes still on offer can be viewed. A listing preselected from a URL
+  // is kept even if archived, so arriving from an old link still names it.
+  const properties = all.filter((p) => !isArchived(p.status) || p.slug === preselected);
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Controlled so arriving from a listing preselects it, while a visitor who
+  // came straight to /contact can still choose one — or none.
+  const [slug, setSlug] = useState(preselected ?? "");
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  const chosen: Property | undefined = properties.find((p) => p.slug === slug);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSent(true);
+    const form = new FormData(e.currentTarget);
+    setSending(true);
+    setError(null);
+    try {
+      await submitEnquiry({
+        name: String(form.get("name")).trim(),
+        email: String(form.get("email")).trim(),
+        ...(String(form.get("phone") ?? "").trim()
+          ? { phone: String(form.get("phone")).trim() }
+          : {}),
+        ...(String(form.get("message") ?? "").trim()
+          ? { message: String(form.get("message")).trim() }
+          : {}),
+        interest: String(form.get("interest")),
+        ...(slug ? { propertySlug: slug } : {}),
+      });
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong sending that.");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -67,14 +114,21 @@ function ContactPage() {
               {sent ? (
                 <div className="fade-slow flex h-full min-h-[320px] flex-col items-center justify-center rounded-[min(1.5vw,16px)] bg-paper p-10 text-center ring-1 ring-line">
                   <span className="grid size-12 place-items-center rounded-full bg-terracotta/10 text-terracotta">
-                    <svg className="size-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                    <svg
+                      className="size-6"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      viewBox="0 0 24 24"
+                    >
                       <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
                   <h2 className="mt-5 font-display text-2xl">Thank you — received.</h2>
                   <p className="mt-2 max-w-[36ch] text-sm text-ink-soft">
-                    A broker will reply within one working day. Until then, the collection is open
-                    for browsing.
+                    {chosen
+                      ? `Your enquiry about ${chosen.name} is with our brokers, who will reply within one working day.`
+                      : "A broker will reply within one working day. Until then, the collection is open for browsing."}
                   </p>
                 </div>
               ) : (
@@ -84,7 +138,9 @@ function ContactPage() {
                 >
                   <div className="grid gap-6 sm:grid-cols-2">
                     <label className="block">
-                      <span className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">Name</span>
+                      <span className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">
+                        Name
+                      </span>
                       <input
                         required
                         name="name"
@@ -94,7 +150,9 @@ function ContactPage() {
                       />
                     </label>
                     <label className="block">
-                      <span className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">Email</span>
+                      <span className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">
+                        Email
+                      </span>
                       <input
                         required
                         name="email"
@@ -106,10 +164,58 @@ function ContactPage() {
                   </div>
                   <label className="mt-6 block">
                     <span className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">
+                      Phone <span className="normal-case tracking-normal">(optional)</span>
+                    </span>
+                    <input
+                      name="phone"
+                      type="tel"
+                      placeholder="So a broker can call to arrange a time"
+                      className="mt-2 w-full rounded-xl border border-line bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft/50 focus:border-terracotta focus:outline-none"
+                    />
+                  </label>
+
+                  {/* Auto-selected when the visitor arrived from a listing. */}
+                  <label className="mt-6 block">
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">
+                      Which residence
+                    </span>
+                    <select
+                      name="property"
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value)}
+                      className="mt-2 w-full rounded-xl border border-line bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none"
+                    >
+                      <option value="">No particular residence</option>
+                      {properties.map((p) => (
+                        <option key={p.slug} value={p.slug}>
+                          {p.name} — {p.location}
+                        </option>
+                      ))}
+                    </select>
+                    {chosen && (
+                      <span className="mt-2 flex items-center gap-3 rounded-xl bg-cream p-3 ring-1 ring-line">
+                        <img
+                          src={chosen.image}
+                          alt=""
+                          className="size-12 shrink-0 rounded-lg object-cover"
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm text-ink">{chosen.name}</span>
+                          <span className="block text-xs text-ink-soft">
+                            {chosen.location} · {chosen.price}
+                          </span>
+                        </span>
+                      </span>
+                    )}
+                  </label>
+
+                  <label className="mt-6 block">
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">
                       I'm interested in
                     </span>
                     <select
                       name="interest"
+                      defaultValue={preselectedInterest ?? "Booking a viewing"}
                       className="mt-2 w-full rounded-xl border border-line bg-cream px-4 py-3 text-sm text-ink focus:border-terracotta focus:outline-none"
                     >
                       <option>Booking a viewing</option>
@@ -119,22 +225,39 @@ function ContactPage() {
                     </select>
                   </label>
                   <label className="mt-6 block">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">Message</span>
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">
+                      Message
+                    </span>
                     <textarea
-                      required
                       name="message"
                       rows={5}
                       placeholder="Tell us about the light you're looking for…"
                       className="mt-2 w-full rounded-xl border border-line bg-cream px-4 py-3 text-sm text-ink placeholder:text-ink-soft/50 focus:border-terracotta focus:outline-none"
                     />
                   </label>
+                  {error && (
+                    <p className="mt-6 rounded-xl bg-terracotta/10 px-4 py-3 text-sm text-terracotta">
+                      {error}
+                    </p>
+                  )}
                   <button
                     type="submit"
-                    className="mt-8 inline-flex items-center gap-2 rounded-xl bg-ink px-7 py-3 text-sm font-medium text-cream ring-1 ring-ink transition-transform hover:-translate-y-0.5"
+                    disabled={sending}
+                    className="mt-8 inline-flex items-center gap-2 rounded-xl bg-ink px-7 py-3 text-sm font-medium text-cream ring-1 ring-ink transition-transform hover:-translate-y-0.5 disabled:opacity-60"
                   >
-                    Send enquiry
-                    <svg className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-                      <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                    {sending ? "Sending…" : "Send enquiry"}
+                    <svg
+                      className="size-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M5 12h14M13 6l6 6-6 6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                   </button>
                 </form>

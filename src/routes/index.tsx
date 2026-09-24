@@ -1,10 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { featured, properties } from "../lib/properties";
+import { fetchFeatured, fetchProperties } from "../lib/properties";
 import { PropertyCard } from "../components/PropertyCard";
 import { SiteFooter } from "../components/SiteFooter";
 import heroLiving from "../assets/hero-living.jpg";
 
 export const Route = createFileRoute("/")({
+  // Both lists come from the CRM database, so the homepage reflects whatever
+  // is published there without a rebuild.
+  loader: async () => {
+    const [featured, all] = await Promise.all([fetchFeatured(), fetchProperties()]);
+    return { featured, all };
+  },
   head: () => ({
     meta: [
       { title: "Maison — Curated Homes & Private Residences" },
@@ -33,9 +39,10 @@ const stats = [
 ];
 
 function HomePage() {
-  const explore = properties.filter((p) =>
-    ["hilltop-farmhouse", "the-larch-house", "palm-court-residence"].includes(p.slug)
-  );
+  const { featured, all } = Route.useLoaderData();
+  // Whatever is not in the featured trio, so the grid fills itself as the
+  // portfolio changes rather than naming three slugs.
+  const explore = all.filter((p) => !featured.some((f) => f.slug === p.slug)).slice(0, 3);
 
   return (
     <main>

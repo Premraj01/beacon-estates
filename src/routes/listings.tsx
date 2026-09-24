@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { properties, type PropertyType } from "../lib/properties";
+import { fetchProperties, isArchived, type PropertyType } from "../lib/properties";
 import { PropertyCard } from "../components/PropertyCard";
 import { SiteFooter } from "../components/SiteFooter";
 
 export const Route = createFileRoute("/listings")({
+  loader: () => fetchProperties(),
   head: () => ({
     meta: [
       { title: "Listings — Maison" },
@@ -25,23 +26,40 @@ export const Route = createFileRoute("/listings")({
   component: ListingsPage,
 });
 
-type Filter = "all" | PropertyType | "4plus";
+type Filter = "all" | PropertyType | "4plus" | "archived";
 
-const filters: { id: Filter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "villa", label: "Villas" },
-  { id: "loft", label: "Lofts" },
-  { id: "coastal", label: "Coastal" },
-  { id: "4plus", label: "4+ beds" },
-];
+/**
+ * Kinds come from the CRM's vocabulary now. Only the ones actually in the
+ * portfolio are offered, so a filter never returns an empty collection.
+ */
+const KIND_LABELS: Record<PropertyType, string> = {
+  Villa: "Villas",
+  Apartment: "Apartments",
+  House: "Houses",
+  Plot: "Plots",
+  Land: "Land",
+  Commercial: "Commercial",
+};
 
 function ListingsPage() {
+  const properties = Route.useLoaderData();
   const [filter, setFilter] = useState<Filter>("all");
+
+  const available = properties.filter((p) => !isArchived(p.status));
+  const archived = properties.filter((p) => isArchived(p.status));
+  const kinds = [...new Set(properties.map((p) => p.type))];
+  const filters: { id: Filter; label: string }[] = [
+    { id: "all", label: "All" },
+    ...kinds.map((kind) => ({ id: kind, label: KIND_LABELS[kind] })),
+    { id: "4plus", label: "4+ beds" },
+    ...(archived.length ? [{ id: "archived" as Filter, label: "Sold & let" }] : []),
+  ];
 
   const visible = properties.filter((p) => {
     if (filter === "all") return true;
-    if (filter === "4plus") return p.beds >= 4;
-    return p.type === filter;
+    if (filter === "archived") return isArchived(p.status);
+    if (filter === "4plus") return p.beds >= 4 && !isArchived(p.status);
+    return p.type === filter && !isArchived(p.status);
   });
 
   return (
@@ -55,8 +73,10 @@ function ListingsPage() {
             Every residence, considered
           </h1>
           <p className="rise-2 mt-4 max-w-[48ch] text-pretty text-ink-soft">
-            Nine homes currently in the portfolio — each photographed at the hour the light is
-            kindest, each walked by our studio before it earns a place here.
+            {available.length} {available.length === 1 ? "home" : "homes"} currently on the market —
+            each photographed at the hour the light is kindest, each walked by our studio before it
+            earns a place here.
+            {archived.length > 0 && ` ${archived.length} more recently sold or let.`}
           </p>
 
           <div className="rise-3 mt-8 flex flex-wrap gap-2">

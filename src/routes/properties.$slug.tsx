@@ -1,27 +1,34 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { getProperty, properties } from "../lib/properties";
+import { fetchProperties, fetchProperty, isArchived } from "../lib/properties";
 import { PropertyCard } from "../components/PropertyCard";
 import { SiteFooter } from "../components/SiteFooter";
 
 export const Route = createFileRoute("/properties/$slug")({
-  loader: ({ params }) => {
-    const property = getProperty(params.slug);
+  loader: async ({ params }) => {
+    const [property, all] = await Promise.all([fetchProperty(params.slug), fetchProperties()]);
     if (!property) throw notFound();
-    return property;
+    return { property, all };
   },
   head: ({ loaderData }) => ({
     meta: [
-      { title: loaderData ? `${loaderData.name}, ${loaderData.location} — Maison` : "Not found — Maison" },
+      {
+        title: loaderData
+          ? `${loaderData.property.name}, ${loaderData.property.location} — Maison`
+          : "Not found — Maison",
+      },
       ...(loaderData
         ? [
             {
               name: "description",
-              content: `${loaderData.name} in ${loaderData.location}: ${loaderData.beds} beds, ${loaderData.baths} baths, ${loaderData.sqft.toLocaleString()} sq ft. Listed at ${loaderData.price}.`,
+              content: `${loaderData.property.name} in ${loaderData.property.location}: ${loaderData.property.beds} beds, ${loaderData.property.baths} baths, ${loaderData.property.sqft.toLocaleString()} sq ft. Listed at ${loaderData.property.price}.`,
             },
-            { property: "og:title", content: `${loaderData.name}, ${loaderData.location} — Maison` },
+            {
+              property: "og:title",
+              content: `${loaderData.property.name}, ${loaderData.property.location} — Maison`,
+            },
             {
               property: "og:description",
-              content: loaderData.description.slice(0, 150),
+              content: loaderData.property.description.slice(0, 150),
             },
             { property: "og:type", content: "website" },
             { name: "twitter:card", content: "summary_large_image" },
@@ -33,8 +40,10 @@ export const Route = createFileRoute("/properties/$slug")({
 });
 
 function PropertyDetailPage() {
-  const property = Route.useLoaderData();
-  const others = properties.filter((p) => p.slug !== property.slug).slice(0, 3);
+  const { property, all } = Route.useLoaderData();
+  const archived = isArchived(property.status);
+  // Once a home is gone, the useful thing to show is what is still available.
+  const others = all.filter((p) => p.slug !== property.slug && !isArchived(p.status)).slice(0, 3);
 
   return (
     <main>
@@ -44,7 +53,13 @@ function PropertyDetailPage() {
             to="/listings"
             className="rise inline-flex items-center gap-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink"
           >
-            <svg className="size-4 rotate-180" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+            <svg
+              className="size-4 rotate-180"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              viewBox="0 0 24 24"
+            >
               <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             Back to the collection
@@ -56,8 +71,17 @@ function PropertyDetailPage() {
                 <img
                   src={property.image}
                   alt={`${property.name}, ${property.location}`}
-                  className="aspect-[4/3] w-full object-cover"
+                  className={`aspect-[4/3] w-full object-cover ${
+                    archived ? "scale-110 blur-[10px] saturate-50" : ""
+                  }`}
                 />
+                {archived && (
+                  <span className="absolute inset-0 grid place-items-center bg-ink/25">
+                    <span className="rounded-full bg-cream/95 px-7 py-3 font-display text-2xl tracking-wide text-ink">
+                      {property.status}
+                    </span>
+                  </span>
+                )}
                 {property.tag && (
                   <span className="absolute top-4 left-4 rounded-full bg-terracotta px-3 py-1 text-[10px] uppercase tracking-[0.15em] text-cream">
                     {property.tag}
@@ -80,27 +104,75 @@ function PropertyDetailPage() {
                 </div>
                 <div>
                   <p className="font-display text-2xl">{property.baths}</p>
-                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-soft">Baths</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-soft">
+                    Baths
+                  </p>
                 </div>
                 <div>
                   <p className="font-display text-2xl">{property.sqft.toLocaleString()}</p>
-                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-soft">Sq ft</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-ink-soft">
+                    Sq ft
+                  </p>
                 </div>
               </div>
               <p className="rise-3 mt-6 text-pretty leading-relaxed text-ink-soft">
                 {property.description}
               </p>
               <div className="rise-4 mt-8 flex flex-wrap items-center gap-4">
-                <Link
-                  to="/contact"
-                  className="inline-flex items-center gap-2 rounded-xl bg-ink px-7 py-3 text-sm font-medium text-cream ring-1 ring-ink transition-transform hover:-translate-y-0.5"
-                >
-                  Book a viewing
-                  <svg className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-                    <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </Link>
-                <span className="text-sm text-ink-soft">Private showings, seven days a week</span>
+                {archived ? (
+                  <>
+                    <Link
+                      to="/contact"
+                      search={{ interest: "Buying a residence" }}
+                      className="inline-flex items-center gap-2 rounded-xl bg-ink px-7 py-3 text-sm font-medium text-cream ring-1 ring-ink transition-transform hover:-translate-y-0.5"
+                    >
+                      Find something similar
+                      <svg
+                        className="size-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M5 12h14M13 6l6 6-6 6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </Link>
+                    <span className="text-sm text-ink-soft">
+                      This residence is no longer available
+                      {property.status === "Sold" ? " — it has been sold" : " — it has been let"}.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/contact"
+                      search={{ property: property.slug, interest: "Booking a viewing" }}
+                      className="inline-flex items-center gap-2 rounded-xl bg-ink px-7 py-3 text-sm font-medium text-cream ring-1 ring-ink transition-transform hover:-translate-y-0.5"
+                    >
+                      Book a viewing
+                      <svg
+                        className="size-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M5 12h14M13 6l6 6-6 6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </Link>
+                    <span className="text-sm text-ink-soft">
+                      Private showings, seven days a week
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -113,7 +185,10 @@ function PropertyDetailPage() {
           <h2 className="rise font-display text-3xl tracking-tight">What the house holds</h2>
           <div className="mt-8 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
             {property.features.map((f, i) => (
-              <div key={f} className={`rise-${(i % 3) + 1} flex items-start gap-3 border-b border-line pb-4`}>
+              <div
+                key={f}
+                className={`rise-${(i % 3) + 1} flex items-start gap-3 border-b border-line pb-4`}
+              >
                 <span className="mt-2 size-1.5 shrink-0 rounded-full bg-terracotta" />
                 <p className="text-sm text-ink">{f}</p>
               </div>

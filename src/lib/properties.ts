@@ -1,234 +1,215 @@
-import villaAster from "../assets/villa-aster.jpg";
-import meridianLoft from "../assets/meridian-loft.jpg";
-import casaSolana from "../assets/casa-solana.jpg";
-import hilltopFarmhouse from "../assets/hilltop-farmhouse.jpg";
-import larchHouse from "../assets/larch-house.jpg";
-import palmCourt from "../assets/palm-court.jpg";
-import duneHouse from "../assets/dune-house.jpg";
-import foundryLoft from "../assets/foundry-loft.jpg";
-import cypressVilla from "../assets/cypress-villa.jpg";
+/**
+ * The portfolio, read from the Maison CRM API.
+ *
+ * Listings used to be hardcoded in this file. They now live in the CRM's
+ * Postgres database, which is the single source of truth for both this site
+ * and the CRM — publishing or editing a listing there changes this site on the
+ * next request, with no rebuild.
+ *
+ * The API's shape is translated here into the one this site's components
+ * already speak (`location`, `beds`, `sqft`, a formatted `price` string), so
+ * the pages stayed as they were.
+ */
 
-export type PropertyType = "villa" | "loft" | "coastal";
+const API_URL = import.meta.env["VITE_API_URL"] ?? "http://localhost:3000";
+const API_PREFIX = import.meta.env["VITE_API_PREFIX"] ?? "/api";
+
+/**
+ * Matches `PROPERTY_KINDS` in the backend's `properties.types.ts`. The site
+ * used to have its own villa/loft/coastal vocabulary; it now shares the CRM's
+ * so a listing means the same thing in both places.
+ */
+export type PropertyType = "Apartment" | "House" | "Villa" | "Plot" | "Land" | "Commercial";
+
+export type PropertyTag = "Signature" | "New";
+
+/**
+ * Where a listing stands. Sold and rented listings stay on the site — shown
+ * blurred and stamped — because a full sale board is the best advertisement a
+ * broker has. `isArchived` is the single test for that everywhere.
+ */
+export type PropertyStatus = "Available" | "Sold" | "Rented";
+
+export function isArchived(status: PropertyStatus): boolean {
+  return status === "Sold" || status === "Rented";
+}
 
 export interface Property {
   slug: string;
   name: string;
   location: string;
+  /** Pre-formatted for display — "$4.8M", or "Price on request" when unset. */
   price: string;
   beds: number;
   baths: number;
   sqft: number;
   type: PropertyType;
-  tag?: string;
+  status: PropertyStatus;
+  tag?: PropertyTag;
   portrait?: boolean;
+  featured: boolean;
   image: string;
   description: string;
   features: string[];
 }
 
-export const properties: Property[] = [
-  {
-    slug: "casa-solana",
-    name: "Casa Solana",
-    location: "Malibu",
-    price: "$4.8M",
-    beds: 5,
-    baths: 4,
-    sqft: 4800,
-    type: "coastal",
-    tag: "Signature",
-    portrait: true,
-    image: casaSolana,
-    description:
-      "Perched above the Pacific on a private bluff, Casa Solana is a study in glass and golden light. Floor-to-ceiling glazing wraps the main level, dissolving the line between the living spaces and the horizon. Evenings end on the cantilevered terrace as the sun drops into the sea.",
-    features: [
-      "Cantilevered ocean terrace",
-      "Floor-to-ceiling glass walls",
-      "Heated limestone floors",
-      "Private beach path",
-      "Chef's kitchen with oak cabinetry",
-      "Two-car garage and motor court",
-    ],
-  },
-  {
-    slug: "villa-aster",
-    name: "Villa Aster",
-    location: "Sonoma",
-    price: "$3.2M",
-    beds: 4,
-    baths: 3,
-    sqft: 3600,
-    type: "villa",
-    tag: "New",
-    portrait: true,
-    image: villaAster,
-    description:
-      "A stone villa in the heart of wine country, Villa Aster pairs old-world materiality with a quietly modern plan. Cypress trees line the approach, and evenings gather around the courtyard fountain as the hills turn amber.",
-    features: [
-      "Hand-cut stone facade",
-      "Courtyard with fountain",
-      "Cypress-lined drive",
-      "Vineyard views",
-      "Wine cellar",
-      "Guest annex",
-    ],
-  },
-  {
-    slug: "the-meridian-loft",
-    name: "The Meridian Loft",
-    location: "Tribeca",
-    price: "$2.1M",
-    beds: 2,
-    baths: 2,
-    sqft: 1900,
-    type: "loft",
-    portrait: true,
-    image: meridianLoft,
-    description:
-      "Inside a converted 1912 warehouse, the Meridian Loft holds sixteen-foot ceilings, arched steel windows and walls washed in warm terracotta plaster. Brass fixtures catch the afternoon light that pours across the polished concrete floor.",
-    features: [
-      "16-ft vaulted ceilings",
-      "Arched industrial windows",
-      "Terracotta plaster walls",
-      "Brass fixtures throughout",
-      "Keyed elevator entry",
-      "Original timber beams",
-    ],
-  },
-  {
-    slug: "hilltop-farmhouse",
-    name: "Hilltop Farmhouse",
-    location: "Napa",
-    price: "$1.6M",
-    beds: 3,
-    baths: 2,
-    sqft: 2900,
-    type: "villa",
-    image: hilltopFarmhouse,
-    description:
-      "Set on a gentle rise above the valley, this farmhouse keeps its cream cabinetry, terracotta tile and slow mornings intact. The kitchen opens to a herb garden, and every window frames a row of vines.",
-    features: [
-      "Terracotta tile floors",
-      "Farmhouse kitchen",
-      "Wrap-around porch",
-      "Herb and kitchen garden",
-      "Barn workshop",
-      "Valley views",
-    ],
-  },
-  {
-    slug: "the-larch-house",
-    name: "The Larch House",
-    location: "Hudson Valley",
-    price: "$2.4M",
-    beds: 4,
-    baths: 3,
-    sqft: 3400,
-    type: "villa",
-    image: larchHouse,
-    description:
-      "Named for the larches that ring it, this warm-plastered house is built for readers and slow Sundays. A sunlit nook anchors every floor, and the plaster walls hold the day's light long after dusk.",
-    features: [
-      "Warm plaster interiors",
-      "Reading nook on every floor",
-      "Linen-draped windows",
-      "Wood-burning stove",
-      "Mature larch grove",
-      "Detached studio",
-    ],
-  },
-  {
-    slug: "palm-court-residence",
-    name: "Palm Court Residence",
-    location: "Palm Springs",
-    price: "$3.9M",
-    beds: 5,
-    baths: 4,
-    sqft: 4100,
-    type: "villa",
-    image: palmCourt,
-    description:
-      "A desert-modern courtyard house arranged around a single olive tree and a still, clear pool. Concrete planes, deep shade and long water make the heat feel like a feature, not a condition.",
-    features: [
-      "Central pool courtyard",
-      "Desert-modern plan",
-      "Polished concrete terraces",
-      "Olive tree courtyard",
-      "Outdoor shower",
-      "Mountain views",
-    ],
-  },
-  {
-    slug: "the-dune-house",
-    name: "The Dune House",
-    location: "Montauk",
-    price: "$2.9M",
-    beds: 3,
-    baths: 2,
-    sqft: 2100,
-    type: "coastal",
-    tag: "New",
-    image: duneHouse,
-    description:
-      "Weathered cedar and dune grass, ten steps from the sand. The Dune House wears its salt air honestly — silvered shingles, deep window seats, and a porch made for watching weather roll in.",
-    features: [
-      "Direct beach access",
-      "Weathered cedar siding",
-      "Window seats throughout",
-      "Outdoor shower",
-      "Dune-top porch",
-      "Fireplace",
-    ],
-  },
-  {
-    slug: "the-foundry-loft",
-    name: "The Foundry Loft",
-    location: "Oakland",
-    price: "$1.9M",
-    beds: 2,
-    baths: 2,
-    sqft: 1650,
-    type: "loft",
-    image: foundryLoft,
-    description:
-      "Exposed brick, steel-framed windows and a century of patina. The Foundry Loft keeps its industrial bones and layers them with warm linen, oak and soft late-afternoon light.",
-    features: [
-      "Exposed brick walls",
-      "Steel-framed windows",
-      "Concrete floors",
-      "Open sleeping mezzanine",
-      "Freight elevator",
-      "Roof deck rights",
-    ],
-  },
-  {
-    slug: "cypress-court-villa",
-    name: "Cypress Court Villa",
-    location: "Santa Barbara",
-    price: "$5.6M",
-    beds: 6,
-    baths: 5,
-    sqft: 5600,
-    type: "villa",
-    tag: "Signature",
-    image: cypressVilla,
-    description:
-      "A Mediterranean estate organised around a grand fountain court, where cypress columns rise against warm stone. Loggias, balconies and shaded arcades make the outdoors live like another wing of the house.",
-    features: [
-      "Grand fountain courtyard",
-      "Stone loggias and arcades",
-      "Six en-suite bedrooms",
-      "Olive and citrus gardens",
-      "Pool and spa terrace",
-      "Three-car garage",
-    ],
-  },
-];
+/** One listing as the API sends it. */
+interface ApiProperty {
+  slug: string;
+  name: string;
+  address: string;
+  kind: PropertyType;
+  listing: "Rent" | "Sale";
+  status: PropertyStatus;
+  price: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  area: number | null;
+  tag: PropertyTag | null;
+  portrait: boolean;
+  featured: boolean;
+  details: string;
+  features: string[];
+  images: string[];
+}
 
-export const featured = properties.filter((p) =>
-  ["villa-aster", "the-meridian-loft", "casa-solana"].includes(p.slug)
-);
+interface Paginated<T> {
+  items: T[];
+  total: number;
+}
 
-export function getProperty(slug: string) {
-  return properties.find((p) => p.slug === slug);
+/** Shown when a listing has no photograph yet. */
+const PLACEHOLDER_IMAGE = "/listings/placeholder.jpg";
+
+/**
+ * Prices are stored as whole currency units and shown the way an agent writes
+ * them on a board — "$4.8M", "$950K". A listing without a price is published
+ * deliberately, so it says so rather than showing a zero.
+ */
+export function formatPrice(price: number | null, listing: "Rent" | "Sale" = "Sale"): string {
+  if (price === null) return "Price on request";
+  if (listing === "Rent") return `$${price.toLocaleString("en-US")}/mo`;
+  if (price >= 1_000_000) return `$${trimZeroes(price / 1_000_000)}M`;
+  if (price >= 1_000) return `$${trimZeroes(price / 1_000)}K`;
+  return `$${price.toLocaleString("en-US")}`;
+}
+
+/** 4.80 -> "4.8", 3.00 -> "3" — one decimal, no trailing zero. */
+function trimZeroes(value: number): string {
+  return value.toFixed(1).replace(/\.0$/, "");
+}
+
+function toProperty(api: ApiProperty): Property {
+  return {
+    slug: api.slug,
+    name: api.name,
+    location: api.address,
+    price: formatPrice(api.price, api.listing),
+    // The CRM leaves these unset for land and commercial units, where they
+    // carry no meaning; the cards read them as numbers, so they become 0.
+    beds: api.bedrooms ?? 0,
+    baths: api.bathrooms ?? 0,
+    sqft: api.area ?? 0,
+    type: api.kind,
+    status: api.status,
+    ...(api.tag ? { tag: api.tag } : {}),
+    ...(api.portrait ? { portrait: true } : {}),
+    featured: api.featured,
+    image: api.images[0] ?? PLACEHOLDER_IMAGE,
+    description: api.details,
+    features: api.features,
+  };
+}
+
+/**
+ * These routes are public on the API, so no credentials are sent. A failure
+ * here is a failure to render a page, so it is thrown rather than swallowed —
+ * the router's error boundary shows it instead of an empty, healthy-looking
+ * collection.
+ */
+async function get<T>(path: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${API_PREFIX}${path}`);
+  } catch {
+    throw new Error(`Could not reach the Maison API at ${API_URL}. Is the backend running?`);
+  }
+  if (!response.ok) {
+    throw new Error(`Maison API responded ${response.status} for ${path}`);
+  }
+  return (await response.json()) as T;
+}
+
+/** Every published listing, newest first. */
+export async function fetchProperties(): Promise<Property[]> {
+  // The portfolio is small; one page covers it and keeps the pages simple.
+  const page = await get<Paginated<ApiProperty>>("/properties?limit=200");
+  // Archived listings stay in the collection but sink below what is still on
+  // offer, so the first thing a visitor sees is something they can buy.
+  return page.items
+    .map(toProperty)
+    .sort((a, b) => Number(isArchived(a.status)) - Number(isArchived(b.status)));
+}
+
+/** The three the CRM has flagged for the homepage. */
+export async function fetchFeatured(): Promise<Property[]> {
+  const page = await get<Paginated<ApiProperty>>("/properties?featured=true&limit=12");
+  return page.items.map(toProperty);
+}
+
+/** One listing by its slug, or null when it is unpublished or removed. */
+export async function fetchProperty(slug: string): Promise<Property | null> {
+  try {
+    return toProperty(await get<ApiProperty>(`/properties/${encodeURIComponent(slug)}`));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) return null;
+    throw error;
+  }
+}
+
+/** What the viewing form sends. `propertySlug` is what ties it to a listing. */
+export interface EnquiryDraft {
+  name: string;
+  email: string;
+  phone?: string;
+  message?: string;
+  interest?: string;
+  propertySlug?: string;
+}
+
+/**
+ * Files an enquiry against the CRM. This is the one write the site makes, and
+ * it is anonymous by design — the API keeps the endpoint narrow and rate
+ * limited rather than asking a prospective buyer to sign in.
+ *
+ * The lead lands in the CRM at stage "New", attached to the listing named here.
+ */
+export async function submitEnquiry(draft: EnquiryDraft): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${API_PREFIX}/leads/enquiries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
+    });
+  } catch {
+    throw new Error("Could not reach us just now. Please try again in a moment.");
+  }
+
+  if (response.status === 429) {
+    throw new Error("That's a few enquiries already — please give it a few minutes.");
+  }
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    throw new Error(readMessage(payload) ?? "Something went wrong sending that.");
+  }
+}
+
+/** Nest sends `message` as a string, or an array for validation errors. */
+function readMessage(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const { message } = payload as { message?: unknown };
+  if (typeof message === "string") return message;
+  if (Array.isArray(message)) return message.filter((p) => typeof p === "string").join(", ");
+  return null;
 }
